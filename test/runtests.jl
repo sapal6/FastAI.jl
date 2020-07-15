@@ -120,8 +120,17 @@ function test_ColSplitter()
     @test b == [1,3]
 end
 
-function test_RangeNumber()
-    @test RangeNumber(3, 1:7) == RangeNumber{Int64,1:7}(3)
+function test_assertBounds()
+    @test assertBounds(0.3, 0,1) === nothing
+    @test_throws ErrorException assertBounds(24,0,1)
+end
+
+function test_RandomSubsetSplitter()
+    items = Array(1:100)
+    splits = RandomSubsetSplitter(0.3, 0.1)
+    trainidxs, valididxs = splits(items)
+    @test length(trainidxs) === 30
+    @test length(valididxs) === 11    
 end
 
 
@@ -138,5 +147,6 @@ end
     @excludeTest test_IndexSplitter()
     @excludeTest test_grandparent_idxs()
     @excludeTest test_ColSplitter()
-    @includeTest test_RangeNumber()
+    @excludeTest test_assertBounds()
+    @includeTest test_RandomSubsetSplitter()
 end
