@@ -20,10 +20,11 @@ Get, split, and label
     a list of items, split them in to train/valid sets, and
     label them.
 =#
-
+using Random
 using Unicode
 using MLDataUtils
 using DataStructures
+using DataFrames
 
 #TODO: ignore case while checking extesnions
 function process_files(path::AbstractString,
@@ -261,4 +262,95 @@ end
 function GrandparentSplitter(train_name::Tuple, valid_name::Tuple)
     train_idxs = items -> grandparent_idxs(items, train_name)
     valid_idxs = items -> grandparent_idxs(items, valid_name)
+end
+
+#=
+do we need to port the below functions?
+In juli acreating anonymous functions are easier than in python.
+Keeping this in mind do we need a top level API to split indices 
+on basis of a fucntion output?
+
+Similar question applies for the MaskSplitter function and FileSplitter.
+=#
+#= def FuncSplitter(func):
+    "Split `items` by result of `func` (`True` for validation, `False` for training set)."
+    def _inner(o, **kwargs):
+        val_idx = mask2idxs(func(o_) for o_ in o)
+        return IndexSplitter(val_idx)(o)
+    return _inner
+
+# export
+def MaskSplitter(mask):
+    "Split `items` depending on the value of `mask`."
+    def _inner(o, **kwargs): return IndexSplitter(mask2idxs(mask))(o)
+    return _inner 
+    
+def FileSplitter(fname):
+    "Split `items` depending on the value of `mask`."
+    valid = Path(fname).read().split('\n')
+    def _func(x): return x.name in valid
+    def _inner(o, **kwargs): return FuncSplitter(_func)(o)
+    return _inner
+    =#
+
+#=
+"Split `items` (supposed to be a dataframe) by value in `col`"
+e.g df = {'a': [0,1,2,3,4], 'b': [True,False,True,True,False]}
+split = ColSplitter("b")
+split(df)
+[[2,5],[1,3,4]]
+=#
+function ColSplitter(;col=:is_valid)
+    df -> IndexSplitter([DataFrames.row(collect(eachrow(df))[i])
+                          for i in 1:size(df, 1)],
+                          findall(df[col])) 
+end
+
+function ColSplitter(col::Integer)
+    df -> IndexSplitter([DataFrames.row(collect(eachrow(df))[i])
+                            for i in 1:size(df, 1)],
+                            findall(df[!, col]))     
+end
+
+#TODO: can be cleaner
+#= checking the bounds - 
+https://discourse.julialang.org/t/range-checking-bounds-of-a-variable-checking/13931/2 =#
+struct RangeNumber{T<:Number, R}
+    v::T
+    #constructor
+    RangeNumber{T, R}(n) where {T, R} = RangeNumber(convert(T, n), R)
+    function RangeNumber(v::Number, r::UnitRange)
+        v in r || error("$v not in $r")
+        return new{typeof(v), r}(v)
+    end
+end
+
+#=
+Take randoms subsets of `splits` with `train_sz` and `valid_sz`
+e.g items= [1,2,3,4,5,6,7,8,9,10]
+RandomSubsetSplitter(0.3,0.1)
+=#
+
+#= TODO: does anythng already exists in the ecosystem which does 
+something similar to this but in much more efficient way 
+
+#TODO: test this
+uses https://en.wikipedia.org/wiki/Mersenne_Twister
+    https://docs.julialang.org/en/v1/stdlib/Random/#Random.MersenneTwister=#
+function RandomSubsetSplitter(train_sz, valid_sz, seed::Integer)
+    RangeNumber(train_sz, 1:2)
+    RangeNumber(valid_sz, 1:2)
+    train_len,valid_len = items -> (convert(Int,round(length(items)*train_sz)),
+                                        convert(Int,round(length(items)*valid_sz)))
+    idxs = [i for i in rand(MersenneTwister(seed), 4)]
+    idxs[1:train_len],idxs[train_len:train_len+valid_len]
+end
+
+function RandomSubsetSplitter(train_sz, valid_sz)
+    RangeNumber(train_sz, 1:2)
+    RangeNumber(valid_sz, 1:2)
+    train_len,valid_len = items -> (convert(Int,round(length(items)*train_sz)),
+                                        convert(Int,round(length(items)*valid_sz)))
+    idxs = [i for i in rand(MersenneTwister(), 4)]
+    idxs[1:train_len],idxs[train_len:train_len+valid_len]
 end

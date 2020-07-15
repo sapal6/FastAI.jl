@@ -111,6 +111,19 @@ function test_grandparent_idxs()
     
 end
 
+function test_ColSplitter()
+    data = DataFrame(a = [1, 2, 3], b = [true, false, true])
+    split_with_name = ColSplitter(col = :b) 
+    split_with_index = ColSplitter()
+    a,b = split_with_name(data)
+    @test a == [2]
+    @test b == [1,3]
+end
+
+function test_RangeNumber()
+    @test RangeNumber(3, 1:7) == RangeNumber{Int64,1:7}(3)
+end
+
 
 @testset "All" begin
     @excludeTest test_transforms_process_files()
@@ -123,5 +136,7 @@ end
     @excludeTest test_RandomSplitter()
     @excludeTest test_TrainTestSplitter2()
     @excludeTest test_IndexSplitter()
-    @includeTest test_grandparent_idxs()
+    @excludeTest test_grandparent_idxs()
+    @excludeTest test_ColSplitter()
+    @includeTest test_RangeNumber()
 end
