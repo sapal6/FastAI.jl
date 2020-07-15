@@ -312,17 +312,10 @@ function ColSplitter(col::Integer)
                             findall(df[!, col]))     
 end
 
-#TODO: can be cleaner
-#= checking the bounds - 
-https://discourse.julialang.org/t/range-checking-bounds-of-a-variable-checking/13931/2 =#
-struct RangeNumber{T<:Number, R}
-    v::T
-    #constructor
-    RangeNumber{T, R}(n) where {T, R} = RangeNumber(convert(T, n), R)
-    function RangeNumber(v::Number, r::UnitRange)
-        v in r || error("$v not in $r")
-        return new{typeof(v), r}(v)
-    end
+#= checking the bounds - =#
+function assertBounds(num, lowerbound, upperbound)
+    lowerbound<num<upperbound ? nothing : error("$num in
+                                          $lowerbound:$upperbound")
 end
 
 #=
@@ -332,25 +325,22 @@ RandomSubsetSplitter(0.3,0.1)
 =#
 
 #= TODO: does anythng already exists in the ecosystem which does 
-something similar to this but in much more efficient way 
-
-#TODO: test this
-uses https://en.wikipedia.org/wiki/Mersenne_Twister
-    https://docs.julialang.org/en/v1/stdlib/Random/#Random.MersenneTwister=#
-function RandomSubsetSplitter(train_sz, valid_sz, seed::Integer)
-    RangeNumber(train_sz, 1:2)
-    RangeNumber(valid_sz, 1:2)
-    train_len,valid_len = items -> (convert(Int,round(length(items)*train_sz)),
-                                        convert(Int,round(length(items)*valid_sz)))
-    idxs = [i for i in rand(MersenneTwister(seed), 4)]
-    idxs[1:train_len],idxs[train_len:train_len+valid_len]
+something similar to this but in much more efficient way=#
+function Splitter(items, train_sz, valid_sz)
+    train_valid_len  = (convert(Int,round(length(items)*train_sz)),
+                         convert(Int,round(length(items)*valid_sz)))
+    idxs = shuffle!([i for i in 1:length(items)])
+    idxs[1:train_valid_len[1]],idxs[train_valid_len[1]:train_valid_len[1]+
+                       train_valid_len[2]]
 end
 
 function RandomSubsetSplitter(train_sz, valid_sz)
-    RangeNumber(train_sz, 1:2)
-    RangeNumber(valid_sz, 1:2)
-    train_len,valid_len = items -> (convert(Int,round(length(items)*train_sz)),
-                                        convert(Int,round(length(items)*valid_sz)))
-    idxs = [i for i in rand(MersenneTwister(), 4)]
-    idxs[1:train_len],idxs[train_len:train_len+valid_len]
+    assertBounds(train_sz, 0,1)
+    assertBounds(valid_sz, 0,1)
+    items -> Splitter(items, train_sz, valid_sz)
 end
+
+#=
+Label -
+ The final set of functions is used to label a single item of data.
+=#
