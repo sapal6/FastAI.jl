@@ -344,3 +344,20 @@ end
 Label -
  The final set of functions is used to label a single item of data.
 =#
+
+#=
+"Label `item` with the parent folder name."
+e.g. parent_label("fastai_dev/dev/data/mnist_tiny/train/3/9932.png"))
+3
+=#
+function parent_label(path::AbstractString, args...)
+    last(dirname(path))
+end
+#= Label `item` with regex `pat`. 
+e.g. pattern = RegexLabeller("fastai_dev/dev/data/mnist_tiny/train/3/9932.png")
+     pattern("[0-9]+")
+     '3'
+=#
+function RegexLabeller(pat)
+    path -> convert(String,(match(r"$pat+", "$path")).match)
+end
