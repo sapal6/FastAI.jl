@@ -133,6 +133,19 @@ function test_RandomSubsetSplitter()
     @test length(valididxs) === 11    
 end
 
+function test_parent_label()
+    fnames = ["fastai_dev/dev/data/mnist_tiny/train/3/9932.png",
+               "fastai_dev/dev/data/mnist_tiny/valid/4/9932.png"]
+    @test parent_label("fastai_dev/dev/data/mnist_tiny/train/3/9932.png") === '3'
+    @test [parent_label(path) for path in fnames] == ['3', '4']  
+end
+
+function test_RegexLabeller()
+    path= "fastai_dev/dev/data/mnist_tiny/train/3/9932.png"
+    pat = r"/[\d]+/"
+    split = RegexLabeller(pat)
+    @test split(path) == "3"
+end
 
 @testset "All" begin
     @excludeTest test_transforms_process_files()
@@ -148,5 +161,7 @@ end
     @excludeTest test_grandparent_idxs()
     @excludeTest test_ColSplitter()
     @excludeTest test_assertBounds()
-    @includeTest test_RandomSubsetSplitter()
+    @excludeTest test_RandomSubsetSplitter()
+    @excludeTest test_parent_label()
+    @includeTest test_RegexLabeller()
 end
