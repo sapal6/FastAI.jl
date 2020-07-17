@@ -359,5 +359,6 @@ e.g. pattern = RegexLabeller("fastai_dev/dev/data/mnist_tiny/train/3/9932.png")
      '3'
 =#
 function RegexLabeller(pat)
-    path -> convert(String,(match(r"$pat+", "$path")).match)
+    path -> strip(convert(String,(match(pat, "$path")).match), ['/', '/'])
 end
+
