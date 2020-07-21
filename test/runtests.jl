@@ -147,6 +147,21 @@ function test_RegexLabeller()
     @test split(path) == "3"
 end
 
+#todo: separate these tests
+function test_ColReader()
+    df = DataFrame(A = ["a", "b", "c"], B = ["1 2", "0", ""], C=["a", "b", "c"])
+    colreader1 = ColReader(:A, pref="1", suff="2")
+    @test colreader(df) == ["1a2", "1b2", "1c2"]
+    delimsplitter = ColReader(:B, label_delim=" ")
+    @test delimsplitter(df) == [["1", "2"], ["0"], [""]]
+    colreader2 = ColReader([:A, :C], pref="1", suff="2")
+    @test colreader2(df) == [["1a2", "1a2"], ["1b2", "1b2"], ["1c2", "1c2"]]
+    colreader3 = ColReader(1, pref="1", suff="2")
+    @test colreader3(df) == ["1a2", "1b2", "1c2"]
+    colreader4 = ColReader(1)
+    @test colreader4(df) == ["1a2", "1b2", "1c2"]
+end
+
 @testset "All" begin
     @excludeTest test_transforms_process_files()
     @excludeTest test_transforms_get_files()
@@ -163,5 +178,6 @@ end
     @excludeTest test_assertBounds()
     @excludeTest test_RandomSubsetSplitter()
     @excludeTest test_parent_label()
-    @includeTest test_RegexLabeller()
+    @excludeTest test_RegexLabeller()
+    @includeTest test_ColReader()
 end
