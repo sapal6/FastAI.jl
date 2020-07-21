@@ -362,3 +362,39 @@ function RegexLabeller(pat)
     path -> strip(convert(String,(match(pat, "$path")).match), ['/', '/'])
 end
 
+#=
+Read `cols` in `row` with potential `pref` and `suff`
+cols can be a list of column names or a list of indices 
+(or a mix of both). If label_delim is passed, the result
+ is split using it.
+=#
+function ColReader(col:: Symbol; pref:: AbstractString,
+                                          suff:: AbstractString)
+    prefix_infix = val -> pref*val*suff
+    df -> prefix_infix.(df[!, col])
+end
+
+function ColReader(col:: Symbol; label_delim:: AbstractString)
+    delim_split = val -> split(val, label_delim)
+    df -> delim_split.(df[!, col])
+end
+
+function ColReader(cols:: Array; pref:: AbstractString,
+                                     suff:: AbstractString)
+    prefix_infix = val -> pref*val*suff
+    df -> [[prefix_infix.(df[!, col][i])  for col in cols] for i in 1:nrow(df)]
+end
+
+function ColReader(col:: Integer; pref:: AbstractString,
+                                       suff:: AbstractString)
+    prefix_infix = val -> pref*val*suff
+    df -> prefix_infix.(df[!, col])
+end
+
+function ColReader(col:: Symbol)
+    df -> df[!, col]
+end
+
+function ColReader(col:: Integer)
+    df -> df[!, col]
+end
