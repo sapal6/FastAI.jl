@@ -417,4 +417,38 @@ Categorize-
 CategoryMap grabs all of the unique values in your column, optionally sort them, 
 and then optionally creates the object-to-int o2i.
 
+class CollBase defined in hereclass CollBase
+but you wont need this classas you can do away with only Categormap as a func - 
+https://github.com/fastai/fastcore/blob/master/nbs/01_foundation.ipynb:
+    "Base class for composing a list of `items`"
+    def __init__(self, items): self.items = items
+    def __len__(self): return len(self.items)
+    def __getitem__(self, k): return self.items[list(k) if isinstance(k,CollBase) else k]
+    def __setitem__(self, k, v): self.items[list(k) if isinstance(k,CollBase) else k] = v
+    def __delitem__(self, i): del(self.items[i])
+    def __repr__(self): return self.items.__repr__()
+    def __iter__(self): return self.items.__iter__()
+
+maybe use this https://syl1.gitbook.io/julia-language-a-concise-tutorial/language-core/custom-types
+take an example from here - https://github.com/JuliaData/DataFrames.jl/blob/master/src/dataframe/dataframe.jl
+
+!. create a struct 
+2. create an inner constructer
+    thuis should return u the col. becuz weare 
+    returning unique categories of the cols and sorting by default
+3. define a outer constructor which would override the default values
+ and return as per taht
 =#
+@kwdef struct CategoryMap
+    col
+    sort=true
+    add_na=false
+end
+
+function CategoryMap(col)
+
+end
+
+function CategoryMap(col; sort=false, add_na=true)
+
+end
