@@ -432,23 +432,50 @@ https://github.com/fastai/fastcore/blob/master/nbs/01_foundation.ipynb:
 maybe use this https://syl1.gitbook.io/julia-language-a-concise-tutorial/language-core/custom-types
 take an example from here - https://github.com/JuliaData/DataFrames.jl/blob/master/src/dataframe/dataframe.jl
 
-!. create a struct 
-2. create an inner constructer
-    thuis should return u the col. becuz weare 
-    returning unique categories of the cols and sorting by default
-3. define a outer constructor which would override the default values
- and return as per taht
 =#
-@kwdef struct CategoryMap
-    col
-    sort=true
-    add_na=false
+struct CategoryMap
+    items
+    o2i
+    CategoryMap(col, o2i)=new(col,o2i)
 end
 
-function CategoryMap(col)
+#=
+following are set of constructors which would 
+create teh items and o2i and then send call teh inner constructors
+to return the color o2i or both
+when sort=true, add_na=false, strict=false
 
-end
+#=not sure at the moment how to preserve the order of CategoricalArray
+as "levels" sorts the array and "levels!" requires the order of levels
+tobe entered manually
+TODO: need to preserve the order of o2i if add_na is true
+=#
+=#
+function CategoryMap(col; sort=True, add_na=False, strict=False)
+    #create items
+    #create o2i
+    #retrun the CategoryMap(col, o2i) inner constructor
+    if isa(col, CategoricalArray)
+        if strict
+            items = levels(droplevels!(col))
+        else
+            items = levels(col)
+        end
+    else
+        if !allunique(col)
+            items = skipmissing(unique!(col))
+            if sort
+                items = sort!(items)
+            end
+        end
+    end
 
-function CategoryMap(col; sort=false, add_na=true)
+    if add_na
+        items=(x -> "#na#"*x).(items)
+    else
+        items
+    end
 
+    o2i= Dict((item,index) => for item in items for index in 1:length(items)
+    CategoryMap(items,o2i)
 end
