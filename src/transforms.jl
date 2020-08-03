@@ -416,56 +416,39 @@ Categorize-
     def __eq__(self,b): return all_equal(b,self)
 CategoryMap grabs all of the unique values in your column, optionally sort them, 
 and then optionally creates the object-to-int o2i.
-
-class CollBase defined in hereclass CollBase
-but you wont need this classas you can do away with only Categormap as a func - 
-https://github.com/fastai/fastcore/blob/master/nbs/01_foundation.ipynb:
-    "Base class for composing a list of `items`"
-    def __init__(self, items): self.items = items
-    def __len__(self): return len(self.items)
-    def __getitem__(self, k): return self.items[list(k) if isinstance(k,CollBase) else k]
-    def __setitem__(self, k, v): self.items[list(k) if isinstance(k,CollBase) else k] = v
-    def __delitem__(self, i): del(self.items[i])
-    def __repr__(self): return self.items.__repr__()
-    def __iter__(self): return self.items.__iter__()
-
-maybe use this https://syl1.gitbook.io/julia-language-a-concise-tutorial/language-core/custom-types
-take an example from here - https://github.com/JuliaData/DataFrames.jl/blob/master/src/dataframe/dataframe.jl
-
 =#
 struct CategoryMap
     items
     o2i
-    CategoryMap(col, o2i)=new(col,o2i)
+    CategoryMap(items, o2i)=new(items,o2i)
 end
-
-#=
-following are set of constructors which would 
-create teh items and o2i and then send call teh inner constructors
-to return the color o2i or both
-when sort=true, add_na=false, strict=false
 
 #=not sure at the moment how to preserve the order of CategoricalArray
 as "levels" sorts the array and "levels!" requires the order of levels
 tobe entered manually
 TODO: need to preserve the order of o2i if add_na is true
 =#
-=#
-function CategoryMap(col; sort=True, add_na=False, strict=False)
-    #create items
-    #create o2i
-    #retrun the CategoryMap(col, o2i) inner constructor
+function CategoryMap(col; sort_Val=true, add_na=false, strict=false)
+    println("+++++after 432")
+    items=[]
     if isa(col, CategoricalArray)
+        println("after 434")
         if strict
+            println("after 435")
             items = levels(droplevels!(col))
+            println("after 437")
         else
             items = levels(col)
+            println("after 440")
         end
     else
+        println("+++++after 444")
         if !allunique(col)
+            println("+++++after 446")
             items = skipmissing(unique!(col))
-            if sort
-                items = sort!(items)
+            if sort_Val
+                println("+++++after 449")
+                items = sort!(col)
             end
         end
     end
@@ -473,9 +456,15 @@ function CategoryMap(col; sort=True, add_na=False, strict=False)
     if add_na
         items=(x -> "#na#"*x).(items)
     else
-        items
+        items=items
+        println("+++++after 459")
+        println(items)
     end
 
-    o2i= Dict((item,index) => for item in items for index in 1:length(items)
+    o2i= Dict((item,index) 
+               for item in items
+                 for index in 1:length(items))
+    #println(items)
+
     CategoryMap(items,o2i)
 end
