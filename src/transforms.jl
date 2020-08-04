@@ -429,42 +429,34 @@ tobe entered manually
 TODO: need to preserve the order of o2i if add_na is true
 =#
 function CategoryMap(col; sort_Val=true, add_na=false, strict=false)
-    println("+++++after 432")
-    items=[]
     if isa(col, CategoricalArray)
-        println("after 434")
         if strict
-            println("after 435")
             items = levels(droplevels!(col))
-            println("after 437")
         else
             items = levels(col)
-            println("after 440")
         end
     else
-        println("+++++after 444")
         if !allunique(col)
-            println("+++++after 446")
             items = skipmissing(unique!(col))
             if sort_Val
-                println("+++++after 449")
                 items = sort!(col)
             end
         end
     end
 
     if add_na
-        items=(x -> "#na#"*x).(items)
+        #items=(x -> "#na#"*x).(items)
+        items=pushfirst!(items, "#na#")
     else
         items=items
-        println("+++++after 459")
-        println(items)
     end
 
-    o2i= Dict((item,index) 
-               for item in items
-                 for index in 1:length(items))
-    #println(items)
-
+    o2i= Dict((item,findall(isequal(item),items)[1]) for item in items)
     CategoryMap(items,o2i)
 end
+
+#=
+All the rest of the classes/functions are inherited from the Transforms calss from fastaicore.
+So it makes sense to design the core.Transform first prior to building the restof teh function sin this set
+https://github.com/fastai/fastcore/blob/master/nbs/04_transform.ipynb
+=#
