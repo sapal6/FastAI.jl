@@ -162,6 +162,28 @@ function test_ColReader()
     @test colreader4(df) == ["a", "b", "c"]
 end
 
+function test_CategoryMap_default()
+    df = DataFrame(A = ["d", "c", "b", "d"])
+    map = CategoryMap(df[!, :A])
+    @test map.items == ["b", "c", "d"]
+    @test map.o2i == Dict("b" => 1, "c" => 2, "d" => 3)
+end
+
+function test_CategoryMap_add_na()
+    df = DataFrame(A = ["d", "c", "b", "d"])
+    map = CategoryMap(df[!, :A], add_na=true)
+    @test map.items == ["#na#", "b", "c", "d"]
+    @test map.o2i == Dict("#na#" => 1, "b" => 2, "c" => 3, "d" => 4)
+end
+
+function test_CategoryMap_categorical()
+    df = DataFrame(A = ["d", "c", "b", "d"])
+    col = categorical(df[!, :A])
+    map = CategoryMap(col, add_na=true)
+    @test map.items == ["#na#", "b", "c", "d"]
+    @test map.o2i == Dict("#na#" => 1, "b" => 2, "c" => 3, "d" => 4)
+end
+
 @testset "All" begin
     @excludeTest test_transforms_process_files()
     @excludeTest test_transforms_get_files()
@@ -179,5 +201,8 @@ end
     @excludeTest test_RandomSubsetSplitter()
     @excludeTest test_parent_label()
     @excludeTest test_RegexLabeller()
-    @includeTest test_ColReader()
+    @excludeTest test_ColReader()
+    @excludeTest test_CategoryMap_default()
+    @excludeTest test_CategoryMap_add_na()
+    @includeTest test_CategoryMap_categorical()
 end
