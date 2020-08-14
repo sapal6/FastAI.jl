@@ -1,4 +1,4 @@
-
+module transforms
 #=
 Transforms.jl:
 
@@ -456,7 +456,35 @@ function CategoryMap(col; sort_Val=true, add_na=false, strict=false)
 end
 
 #=
-All the rest of the classes/functions are inherited from the Transforms calss from fastaicore.
-So it makes sense to design the core.Transform first prior to building the restof teh function sin this set
-https://github.com/fastai/fastcore/blob/master/nbs/04_transform.ipynb
+Categorize-
+"Reversible transform of category string to `vocab` id"
+original code - https://github.com/fastai/fastai2/blob/master/nbs/05_data.transforms.ipynb
+
+Categorize derives from Transforms.
+Following the explanation in this walkthrough
+https://forums.fast.ai/t/fastai-v2-code-walk-thru-2/53978
+A Transform implements the following methods -
+
+setup(transform::T, items, train_setup)
+encodesl(transform::T, func, values, split_idx, vargs...)
+decodes(transform::T, func, x, vargs...)
 =#
+#=TODO: The categorize family of classes in the original code sets
+a defaultloss_func,order,store_attrs. Iamnot sure what this does.
+
+TODO: customize the base.show method like - 
+#https://discourse.julialang.org/t/show-and-showcompact-on-custom-types/8493
+=#
+
+abstract type  AbstractTransform end
+
+function implements_transform(T::DataType)
+    hasmethod(setup, (T,))&&
+     hasmethod(decode, (T, func, values, split_idx, vargs...))&&
+     hasmethod(encode, (func, x, vargs...))
+end
+
+mutable struct Categorize <:AbstractTransform
+    vocab
+end
+
