@@ -1,4 +1,3 @@
-module transforms
 #=
 Transforms.jl:
 
@@ -25,6 +24,9 @@ using Unicode
 using MLDataUtils
 using DataStructures
 using DataFrames
+
+include("transform.jl")
+
 
 #TODO: ignore case while checking extesnions
 function process_files(path::AbstractString,
@@ -417,7 +419,7 @@ Categorize-
 CategoryMap grabs all of the unique values in your column, optionally sort them, 
 and then optionally creates the object-to-int o2i.
 =#
-struct CategoryMap
+mutable struct CategoryMap
     items
     o2i
     CategoryMap(items, o2i)=new(items,o2i)
@@ -455,6 +457,7 @@ function CategoryMap(col; sort_Val=true, add_na=false, strict=false)
     CategoryMap(items,o2i)
 end
 
+
 #=
 Categorize-
 "Reversible transform of category string to `vocab` id"
@@ -471,20 +474,43 @@ decodes(transform::T, func, x, vargs...)
 =#
 #=TODO: The categorize family of classes in the original code sets
 a defaultloss_func,order,store_attrs. Iamnot sure what this does.
-
-TODO: customize the base.show method like - 
-#https://discourse.julialang.org/t/show-and-showcompact-on-custom-types/8493
 =#
-
-abstract type  AbstractTransform end
-
-function implements_transform(T::DataType)
-    hasmethod(setup, (T,))&&
-     hasmethod(decode, (T, func, values, split_idx, vargs...))&&
-     hasmethod(encode, (func, x, vargs...))
+mutable struct Categorize <:Transform
+    vocab
+    reverseMap
+    Categorize(vocab, reverseMap) = new(vocab, reverseMap)
 end
 
-mutable struct Categorize <:AbstractTransform
-    vocab
+#user can use Categorize alone
+#in such case both the transforms and 
+#mapped dict will be recieved
+function Categorize(cols::Array{String};
+            sort_Val=true,
+            add_na=false,
+            strict=false)
+    map = CategoryMap(cols, sort_Val=sort_Val, add_na=add_na, strict=strict)
+    Categorize(map.items, map.o2i)
+end
+
+#user can use only encode to access just transform
+function encode(obj::Categorize)
+    encode(obj.vocab)
+end
+
+
+function decode(obj::Categorize, item::String)
+    map = obj.reverseMap
+    decode(map[item])
+end
+
+function decode(obj::Categorize, item::Integer)
+    map = obj.reverseMap
+    category=""
+    for (key,val) in map
+        if val == item
+            category=key
+        end
+    end
+    decode(category)
 end
 
