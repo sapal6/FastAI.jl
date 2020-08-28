@@ -1,4 +1,4 @@
-name = "FastAI2Julia"
+name = "FastAI"
 uuid = "5d0beca9-ade8-49ae-ad0b-a3cf890e669f"
 authors = ["Peter Wolf", "Julia Community"]
 version = "0.1.0"
@@ -9,6 +9,7 @@ DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
 MLDataUtils = "cc2ba9b6-d476-5e6d-8eaf-a92d5412d41d"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
+Unicode = "4ec0a83e-493e-50e2-b9ac-8f72acf5a8f5"
 
 [compat]
 julia = "1"
