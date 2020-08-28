@@ -1,4 +1,5 @@
-using FastAI2Julia
+using DataFrames
+using FastAI
 using Test
 
 include("../src/transforms.jl")
@@ -184,7 +185,17 @@ function test_CategoryMap_categorical()
     @test map.o2i == Dict("#na#" => 1, "b" => 2, "c" => 3, "d" => 4)
 end
 
-@testset "All" begin
+function test_Categorize()
+    data = ["cat", "dog", "cat"]
+    cat = Categorize(data)
+    @test encode(cat) == ["cat", "dog"]
+    @test decode(cat, "cat") == 1
+    @test decode("cat") == "cat"
+    @test decode(cat, 2) == "dog"
+end
+
+
+ @testset "All" begin
     @excludeTest test_transforms_process_files()
     @excludeTest test_transforms_get_files()
     @excludeTest test_Filegetter()
@@ -204,5 +215,6 @@ end
     @excludeTest test_ColReader()
     @excludeTest test_CategoryMap_default()
     @excludeTest test_CategoryMap_add_na()
-    @includeTest test_CategoryMap_categorical()
+    @excludeTest test_CategoryMap_categorical()
+    @includeTest test_Categorize()
 end
