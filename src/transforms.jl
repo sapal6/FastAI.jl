@@ -20,7 +20,6 @@ Get, split, and label
     label them.
 =#
 using Random
-using Unicode
 using MLDataUtils
 using DataStructures
 using DataFrames
@@ -35,11 +34,9 @@ function process_files(path::AbstractString,
     #gets file as per an extension
       res = []
       extensions === nothing ? res = [joinpath(path, file)
-                                    for file in files
-                                         if .!startswith(file, ".")] :
-                                      res = [joinpath(path, file) for file in files if .!startswith(file, ".") 
-                                      &&
-                                       occursin(extensions, Unicode.normalize(file, casefold=true))]
+                                    for file in files] :
+                                      res = [joinpath(path, file) for file in files
+                                                if any(map(extension->occursin(extension,file),extensions))]
       res
 end
 
@@ -98,10 +95,8 @@ Convienience function to get images with standard image extension
 =#
 function get_image_files(path, recurse=true, folders=nothing)
     res = []
-    image_extensions=Set{AbstractString}(["tiff", "jpeg", "png", "gif", "jpg"])
-    foreach(image_extensions) do img_extension
-        res = [file for file in get_files(path, img_extension, recurse)]
-    end
+    image_extensions=["tiff", "jpeg", "png", "gif", "jpg"]
+    res = [file for file in get_files(path, image_extensions, recurse)]
     res
 end
 
@@ -228,9 +223,9 @@ e.g. grandparent_idxs(["/folder/train/test.png", "/folder/valid/test2.png"],
 
 #TODO: code can be much cleaner
 function grandparent_idxs(items::AbstractArray, name::AbstractString)
-    truthvalues = [occursin("/$name/", item) for item in items]
+    truthvalues = [occursin("$name", item) for item in items]
     idxs=findall(truthvalues)
-    idxs
+    return [items[idx] for idx in idxs]
 end
 #TODO: code can be much cleaner
 function grandparent_idxs(items::AbstractArray, names::Tuple)
@@ -243,7 +238,7 @@ function grandparent_idxs(items::AbstractArray, names::Tuple)
         push!(truths, truthvalues)
     end
     idxs=[idx for truth in truths for idx in findall(truth)]
-    idxs
+    return [items[idx] for idx in idxs]
 end
 
 #=
@@ -252,18 +247,21 @@ e.g. fnames -> GrandparentSplitter(train_name='train', valid_name='valid')
 []
 =#
 function GrandparentSplitter()
-    train_idxs = items -> grandparent_idxs(items, "train")
-    valid_idxs = items -> grandparent_idxs(items, "valid")
+    train = items -> grandparent_idxs(items, "train")
+    valid = items -> grandparent_idxs(items, "valid")
+    train,valid
 end
 
 function GrandparentSplitter(train_name::AbstractString, valid_name::AbstractString)
-    train_idxs = items -> grandparent_idxs(items, train_name)
-    valid_idxs = items -> grandparent_idxs(items, valid_name)
+    train = items -> grandparent_idxs(items, train_name)
+    valid = items -> grandparent_idxs(items, valid_name)
+    train,valid
 end
 
 function GrandparentSplitter(train_name::Tuple, valid_name::Tuple)
-    train_idxs = items -> grandparent_idxs(items, train_name)
-    valid_idxs = items -> grandparent_idxs(items, valid_name)
+    train = items -> grandparent_idxs(items, train_name)
+    valid = items -> grandparent_idxs(items, valid_name)
+    train,valid
 end
 
 #=

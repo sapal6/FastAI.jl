@@ -31,5 +31,6 @@ include("learner.jl")
 include("callback.jl")
 include("transform.jl")
 include("transforms.jl")
+include("datautils.jl")
 
 end
