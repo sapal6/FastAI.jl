@@ -1,0 +1,278 @@
+### A Pluto.jl notebook ###
+# v0.11.13
+
+using Markdown
+using InteractiveUtils
+
+# ╔═╡ 0739c432-f570-11ea-350b-f7cb581de4b7
+include("Mnist-example.jl")
+
+# ╔═╡ e8d2cdce-f75d-11ea-1748-5941cd8052de
+include("dataUtils.jl")
+
+# ╔═╡ 054d5f52-f2c4-11ea-0466-616064003d4c
+md"## data.core"
+
+# ╔═╡ 3c486c40-f4a2-11ea-002e-49fd18af0b8b
+md"It would be nice if we can store the transforms for later use so that we can collect them before and then apply it on a future data.
+
+It would also be nice if we can have automatic collection generation for these transforms."
+
+# ╔═╡ a8090cd0-f45e-11ea-3741-2b882bf56612
+begin
+	
+	struct pipeline
+    transforms
+    end
+	
+	Pipeline(Fn) = pipeline(Tuple([Fn]))
+
+	function Pipeline( FnStack... )
+    pipe = Array{Any,1}( undef, length( FnStack ))
+    for (i, fn) in enumerate( FnStack )
+        pipe[ i ] = fn
+    end
+    return pipeline(Tuple( pipe ))
+    end
+end
+
+# ╔═╡ b18583de-f45b-11ea-01c4-f93da9da2a67
+Meta.code_lowered(Pipeline)
+
+# ╔═╡ a5bb8270-f4a2-11ea-0ba1-5d9a6607bf36
+md"create a Pipeline object - this is a logical representation of the order of func we want to apply to the data.
+
+Doing it this way creates a pipeline object for us automatically"
+
+# ╔═╡ db1558b0-f4a2-11ea-1772-55ffd168b0b9
+md"This one here applies the transforms to the data
+
+>right now I haven't paid much attention to performance as prototyping was priority now"
+
+# ╔═╡ 6b207c90-f49f-11ea-3eb4-311d1db42dce
+function (P::pipeline)(X)
+	foldl( ( X, p ) -> p(X), P.transforms, init = X)
+end
+
+# ╔═╡ 0ab174f0-f4a3-11ea-2409-7fc9f031295e
+md"finally we apply to a future data"
+
+# ╔═╡ 8917d7c0-f49f-11ea-0aa1-eb6eea8c5f41
+pre_process1(data)
+
+# ╔═╡ 5f70d550-f5b4-11ea-38e4-bdb7c46eb439
+pre_process2(data)
+
+# ╔═╡ 1695e3f0-f4a3-11ea-2eef-fb6001adaee4
+md"pipeline creationhas been nicely demonstrated in https://caseykneale.github.io/ChemometricsTools.jl/dev/Demos/Pipelines/
+
+Storing the transforms this way is key to building the high level Datablock."
+
+# ╔═╡ 5daa81ee-f56c-11ea-017a-e3a1a6a8906a
+md"### Datasets"
+
+# ╔═╡ cc2ce9b0-f56c-11ea-389b-7137375a7523
+md"Datasets are the representation of the data as such they are datasources.
+A source to be a Dataset it should implement two functions
+
+* nobs(dataset) --> gets the number of observations
+* getobs(dataset, idx) --> gets the observation at index idx
+
+For this we will implement the interface from [MLDatapattern](https://mldatapatternjl.readthedocs.io/en/latest/documentation/container.html)
+
+#### Dataset
+This is the type which holds the following-
+* data - data of your choice
+* tfs- list of transforms for data and labels"
+
+# ╔═╡ 589bb020-f56d-11ea-348d-6938a60db10e
+begin
+    struct Dataset
+    	data::AbstractVector
+    	tfms::NTuple
+    end
+    function Dataset(data; tfms=nothing)
+        if length(tfms) == 2
+			Dataset(data, (Pipeline(tfms[1]...), Pipeline(tfms[2]...)))
+        else
+	        Dataset(data, (Pipeline(tfms[1]...)))
+        end
+		
+    end
+end
+
+# ╔═╡ 7048bb70-f75f-11ea-1c8a-9bf1fdf269b5
+md"### A short MNIST example"
+
+# ╔═╡ 3cfab94e-f573-11ea-2ab6-7b1e937d384a
+md"we will fetch our dataset path from Mnist-example notebook"
+
+# ╔═╡ 5df171d0-f573-11ea-0608-bb00c305a394
+datasetPath = "mnist_png"
+
+# ╔═╡ 110a36d0-f75e-11ea-1e4d-9312ed9c121c
+md"quick function to fetch the files with standard image extensions like jpg, png etc."
+
+# ╔═╡ 1808fc50-f75e-11ea-109a-3952e1d372eb
+items=get_image_files(datasetPath)
+
+# ╔═╡ 3235baf2-f75e-11ea-0189-25148a07cff1
+length(items)
+
+# ╔═╡ 3f6c9a90-f75e-11ea-3cde-d1120409b05e
+md"Next we split the folders into test and train as per the parent folder names.
+>If there is something like training or testing anywhere find it."
+
+# ╔═╡ 46c47c8e-f75e-11ea-20a5-3549634663f0
+begin
+	splitter= GrandparentSplitter("training", "testing")
+    train_idxs= splitter[1](items)
+    test_idxs= splitter[2](items)
+end
+
+# ╔═╡ 81abf8e0-f5ad-11ea-1f98-1f016617f6dd
+train_data=train_idxs[1:3]
+
+# ╔═╡ 5dcddb20-f75e-11ea-3d0d-1958679ffcfb
+md"Now, we would like to load and image and get it's array representations"
+
+# ╔═╡ 76e6dfd0-f75e-11ea-008d-d783c6fcf675
+img_path = "mnist_png\\training\\0\\1.png"
+
+# ╔═╡ 7f45d190-f75e-11ea-0fc2-f9eaf869a501
+md"The `load_image` and `image2array` functions for dataUtils would help us to do that"
+
+# ╔═╡ 9372c420-f75e-11ea-2b96-69ee92714df0
+img=load_image(img_path)
+
+# ╔═╡ a9797fc0-f75e-11ea-147c-05c385b9d3a0
+image2array(img)
+
+# ╔═╡ e857ffd0-f5ad-11ea-3a8b-153848b42590
+md"if I apply my pipeline to this particular image then what should happen?"
+
+# ╔═╡ fafb9340-f5ad-11ea-2d91-b53f0b61995e
+preProcess = Pipeline(load_image, image2array, parent_label)
+
+# ╔═╡ 8bf67180-f5ae-11ea-25f5-6bd57e91cdf3
+md"The above pipeline won't work because `load_image` and `image2array` are different type of trasnform than `parent_label`. 
+
+The first two transforms transform the data into array while the later one picks up the label from the data hwich in this case is the file path.
+
+This is the reason first two transforms are part of one pipeline and the last one is a different pipeline altogether.
+
+So, the pipeline composition should be in two parts-->
+1. On data
+2. On labels"
+
+# ╔═╡ 77f474a0-f5b0-11ea-36bf-7dfd43c429f5
+md"First we define the nobs and getobs for Dataset"
+
+# ╔═╡ 863a0520-f5b0-11ea-027f-b94ba49fab89
+begin
+	nobs(dataset::Dataset) = length(dataset.data)
+	function getobs(dataset::Dataset, idx::Int64)
+		data = dataset.data[idx]
+
+		if dataset.tfms[1]==nothing || dataset.tfms[2]==nothing
+		   (dataset.tfms[1](data))
+		else
+		   (dataset.tfms[1](data), dataset.tfms[2](data))
+		end
+	end
+end
+
+# ╔═╡ eb41f3c0-f686-11ea-1150-d3e8d248bc60
+function (dataset::Dataset)(idx::Int64)
+	getobs(dataset, idx)
+end
+
+# ╔═╡ ead2a210-f684-11ea-0970-f35cbb69afea
+md"Creating a Datset object by passing the data from the training set and a list of transforms.
+
+The list of transforms has two groups-->
+1. First group is considered to be the trasnforms to be done on the data.
+2. Second group is conisdered to be the transforms to be doen on the labels
+
+The Dataset constructor creates two pipeline types from these two groups of transforms."
+
+# ╔═╡ e7132910-f684-11ea-3cd7-57477d8da966
+untmfd_data=Dataset(train_data, tfms=[[load_image, image2array],[parent_label]])
+
+# ╔═╡ 4dd0bb60-f6b5-11ea-15e6-db029c93074c
+md"Displaying the type of the untmfd_data helps to check if the correct type is formed.
+
+What we have now is the untransformed data."
+
+# ╔═╡ 76eae410-f685-11ea-1648-b3a552805469
+typeof(untmfd_data)
+
+# ╔═╡ 8214b4d0-f6b5-11ea-1d9d-97347883ee10
+md"If we pass an index now to this Dataset object then the `getobs` is called which then applies the pipelines to the data at that index
+
+finally we get a tuple of having the transformed data and the transformed label"
+
+# ╔═╡ 654c52a0-f687-11ea-2a6a-7f0b25a10b6c
+untmfd_data(1)
+
+# ╔═╡ ab5aceb0-f6b5-11ea-382c-ab35182d5c03
+md"A collection of the transformed data and transformed label is now possible.
+
+>There can be a better way to demonstrate this 😌"
+
+# ╔═╡ b8bd5230-f6b5-11ea-1963-cbb0e40aa689
+tmfd_data=[untmfd_data(i) for i in nobs(untmfd_data)]
+
+# ╔═╡ 2b589d90-f6b6-11ea-37d2-0d727f74634b
+md"Let's say if we want to see the label of the data at the first index."
+
+# ╔═╡ 23165b90-f6b6-11ea-3b1e-9f869ec57d5f
+tmfd_data[1][2]
+
+# ╔═╡ Cell order:
+# ╟─054d5f52-f2c4-11ea-0466-616064003d4c
+# ╟─3c486c40-f4a2-11ea-002e-49fd18af0b8b
+# ╠═a8090cd0-f45e-11ea-3741-2b882bf56612
+# ╠═b18583de-f45b-11ea-01c4-f93da9da2a67
+# ╟─a5bb8270-f4a2-11ea-0ba1-5d9a6607bf36
+# ╟─db1558b0-f4a2-11ea-1772-55ffd168b0b9
+# ╠═6b207c90-f49f-11ea-3eb4-311d1db42dce
+# ╟─0ab174f0-f4a3-11ea-2409-7fc9f031295e
+# ╠═8917d7c0-f49f-11ea-0aa1-eb6eea8c5f41
+# ╠═5f70d550-f5b4-11ea-38e4-bdb7c46eb439
+# ╟─1695e3f0-f4a3-11ea-2eef-fb6001adaee4
+# ╟─5daa81ee-f56c-11ea-017a-e3a1a6a8906a
+# ╟─cc2ce9b0-f56c-11ea-389b-7137375a7523
+# ╠═0739c432-f570-11ea-350b-f7cb581de4b7
+# ╠═589bb020-f56d-11ea-348d-6938a60db10e
+# ╟─7048bb70-f75f-11ea-1c8a-9bf1fdf269b5
+# ╟─3cfab94e-f573-11ea-2ab6-7b1e937d384a
+# ╠═e8d2cdce-f75d-11ea-1748-5941cd8052de
+# ╠═5df171d0-f573-11ea-0608-bb00c305a394
+# ╟─110a36d0-f75e-11ea-1e4d-9312ed9c121c
+# ╠═1808fc50-f75e-11ea-109a-3952e1d372eb
+# ╠═3235baf2-f75e-11ea-0189-25148a07cff1
+# ╟─3f6c9a90-f75e-11ea-3cde-d1120409b05e
+# ╠═46c47c8e-f75e-11ea-20a5-3549634663f0
+# ╠═81abf8e0-f5ad-11ea-1f98-1f016617f6dd
+# ╟─5dcddb20-f75e-11ea-3d0d-1958679ffcfb
+# ╠═76e6dfd0-f75e-11ea-008d-d783c6fcf675
+# ╟─7f45d190-f75e-11ea-0fc2-f9eaf869a501
+# ╠═9372c420-f75e-11ea-2b96-69ee92714df0
+# ╠═a9797fc0-f75e-11ea-147c-05c385b9d3a0
+# ╟─e857ffd0-f5ad-11ea-3a8b-153848b42590
+# ╠═fafb9340-f5ad-11ea-2d91-b53f0b61995e
+# ╟─8bf67180-f5ae-11ea-25f5-6bd57e91cdf3
+# ╟─77f474a0-f5b0-11ea-36bf-7dfd43c429f5
+# ╠═863a0520-f5b0-11ea-027f-b94ba49fab89
+# ╠═eb41f3c0-f686-11ea-1150-d3e8d248bc60
+# ╟─ead2a210-f684-11ea-0970-f35cbb69afea
+# ╠═e7132910-f684-11ea-3cd7-57477d8da966
+# ╟─4dd0bb60-f6b5-11ea-15e6-db029c93074c
+# ╠═76eae410-f685-11ea-1648-b3a552805469
+# ╟─8214b4d0-f6b5-11ea-1d9d-97347883ee10
+# ╠═654c52a0-f687-11ea-2a6a-7f0b25a10b6c
+# ╟─ab5aceb0-f6b5-11ea-382c-ab35182d5c03
+# ╠═b8bd5230-f6b5-11ea-1963-cbb0e40aa689
+# ╟─2b589d90-f6b6-11ea-37d2-0d727f74634b
+# ╠═23165b90-f6b6-11ea-3b1e-9f869ec57d5f
