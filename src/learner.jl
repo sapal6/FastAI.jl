@@ -1,11 +1,11 @@
 #=
-Learner.jl:
+learner.jl:
 
 Author: Peter Wolf (opus111@gmail.com)
 
-A first cut at a port of the FastAI V2 Learner API to Julia
+Port of the FastAI V2 Learner API to Julia
 
-Basic class for handling the training loop
+Methods for handling the training loop
 
 The original source is here
 
@@ -15,8 +15,6 @@ The documentation is copied from here
 
 https://github.com/fastai/fastai2/blob/master/docs/learner.html
 
-The main purpose of this code is to see if the team likes the method
-of defining an interface and implementations in Julia
 =#
 
 """
@@ -28,165 +26,258 @@ compute the output of the model from the input
 calculate a loss between this output and the desired target
 compute the gradients of this loss with respect to all the model parameters
 update the parameters accordingly
-zero all the gradients
 
 Any tweak of this training loop is defined in a Callback to avoid over-complicating the code of the training loop, and to make it easy to mix and match different techniques (since they'll be defined in different callbacks).
 
 A callback can implement the following methods:
 
-begin_fit
+before_fit
 after_fit
-begin_train
-after_train
-begin_epoch
+after_cancel_fit
+
+before_epoch
 after_epoch
-begin_batch
-after_batch
-begin_validate
-after_validate
-after_pred
-after_loss
-after_backward
-after_step
-after_cancel_batch
-after_batch
+after_cancel_epoch
+
+before_epoch_train
+after_epoch_train
+after_cancel_epoch_train
+
+before_batch_train
+batch_train_loss
+after_batch_train
+after_cancel_batch_train
+
+before_epoch_validate
+after_epoch_validate
+after_cancel_epoch_validate
+
+before_batch_validate
+after_batch_validate
+batch_validate_loss
+after_cancel_batch_validate
 
 By default handling of these events do nothing.  Special behavior is implemented by overriding these methods
 
 """
 abstract type AbstractCallback end
 
+struct CancelFitException <: Exception end
+struct CancelEpochTrainException <: Exception end
+struct CancelBatchTrainException <: Exception end
+struct CancelEpochValidateException <: Exception end
+struct CancelBatchValidateException <: Exception end
+
 """
-Group together a model, some dls and a loss_func to handle training
+An `AbstractLearner` groups together a model, train and validate data,
+  optimizer, loss function and callbacks.
 
-opt_func will be used to create an optimizer when Learner.fit is called, with lr as a default learning rate. splitter is a function that takes learner.model and returns a list of parameter groups (or just one parameter group if there are no different parameter groups). The default is trainable_params, which returns all trainable parameters of the model.
+[Callbacks](@ref) are used for every tweak of the training loop.
+Callbacks receive epoch, batch and loss information which they may pass on to [Metrics](@ref).
 
-cbs is one or a list of Callbacks [AbstractCallback](@ref) to pass to the Learner. Callbacks are used for every tweak of the training loop. Each Callback is registered as an attribute of Learner (with camel case). At creation, all the callbacks in defaults.callbacks (TrainEvalCallback, Recorder and ProgressCallback) are associated to the Learner.
-
-metrics is an optional list of metrics, that can be either functions or Metrics (see below).
-
-path and model_dir are used to save and/or load models. Often path will be inferred from dls, but you can override it or pass a Path object to model_dir. Make sure you can write in path/model_dir!
-
-wd is the default weight decay used when training the model; moms, the default momentums used in Learner.fit_one_cycle. wd_bn_bias controls if weight decay is applied to BatchNorm layers and bias.
-
-Lastly, train_bn controls if BatchNorm layers are trained even when they are supposed to be frozen according to the splitter. Our empirical experiments have shown that it's the best behavior for those layers in transfer learning.
+# Require interface
+- `data_bunch(l::AbstractLearner)`
+- `data_bunch!(l::AbstractLearner, data_bunch)`
+- `model(l::AbstractLearner)`
+- `model!(l::AbstractLearner, model)`
+- `loss(l::AbstractLearner)`
+- `loss!(l::AbstractLearner, loss)`
+- `opt(l::AbstractLearner)`
+- `opt!(l::AbstractLearner, opt)`
+- `add_cb!(learner::AbstractLearner, cb::AbstractCallback)`
+- `cbs(learner::AbstractLearner)`
+- `fit!(learner::AbstractLearner, epoch_count)`
 """
-mutable struct Learner
+abstract type AbstractLearner end
+
+"""
+    Learner(data_bunch, model; opt = Flux.ADAM(), loss = Flux.mse)
+
+A `Learner` is the standard grouping of a data bunch, model, optimizer, and loss.
+"""
+mutable struct Learner <: AbstractLearner
     cbs:: Array{AbstractCallback}
+    db::DataBunch
+    model
     opt
-    wd
-    n_epoch
     loss
-    dls
 end
+Learner(data_bunch, model; opt=Flux.ADAM(), loss=Flux.mse) = Learner([],data_bunch,model,opt,loss)
 
 """
-add_cb(learner::Learner,cb::AbstractCallback cb)
-
-Add a new Callback [AbstractCallback](@ref) to this Learner [Learner](@ref)
+Get the data bunch for `l`.
 """
-add_cb(learner::Learner,cb::AbstractCallback) = push!(learner.cbs,cb)
+data_bunch(l::Learner) = l.db
+"""
+Set the data bunch for `l` to `data_bunch`.
+"""
+data_bunch!(l::Learner, data_bunch) = l.db = data_bunch
+
+"""
+Get the model for `l`.
+"""
+model(l::Learner) = l.model
+"""
+Set the model for `l` to `model`.
+"""
+model!(l::Learner, model) = l.model = model
+
+"""
+Get the loss for `l`.
+"""
+loss(l::Learner) = l.loss
+"""
+Set the loss for `l` to `loss`.
+"""
+loss!(l::Learner,loss) = l.loss = loss
+
+"""
+Get the optimizer for `l`.
+"""
+opt(l::Learner) = l.opt
+"""
+Set the optimizer for `l` to `opt`.
+"""
+opt!(l::Learner,opt) = l.opt=opt
+
+"""
+Add `cb` to the list of callbacks for `learner`.
+"""
+add_cb!(learner::Learner,cb::AbstractCallback) = push!(learner.cbs,cb)
+"""
+Get the list of callbacks for `learner`.
+"""
+cbs(learner::Learner) = learner.cbs
 
 # pass event to all callbacks
-_cbs_begin_fit(learner::Learner) =  for c in learner.cbs cb.begin_fit(c,learner) end
-_cbs_after_fit(learner::Learner) =  for c in learner.cbs cb.after_fit(c,learner) end
-_cbs_begin_train(learner::Learner) =  for c in learner.cbs cb.begin_train(c,learner) end
-_cbs_after_train(learner::Learner) =  for c in learner.cbs cb.after_train(c,learner) end
-_cbs_begin_epoch(learner::Learner) =  for c in learner.cbs cb.begin_epoch(c,learner) end
-_cbs_after_epoch(learner::Learner) =  for c in learner.cbs cb.after_epoch(c,learner) end
-_cbs_begin_batch(learner::Learner) =  for c in learner.cbs cb.begin_batch(c,learner) end
-_cbs_after_batch(learner::Learner) =  for c in learner.cbs cb.after_batch(c,learner) end
-_cbs_begin_validate(learner::Learner) =  for c in learner.cbs cb.begin_validate(c,learner) end
-_cbs_after_validate(learner::Learner) =  for c in learner.cbs cb.after_validate(c,learner) end
-_cbs_after_pred(learner::Learner) =  for c in learner.cbs cb.after_pred(c,learner) end
-_cbs_after_loss(learner::Learner) =  for c in learner.cbs cb.after_loss(c,learner) end
-_cbs_after_backward(learner::Learner) =  for c in learner.cbs cb.after_backward(c,learner) end
-_cbs_after_step(learner::Learner) =  for c in learner.cbs cb.after_step(c,learner) end
-_cbs_after_cancel_batch(learner::Learner) =  for c in learner.cbs cb.after_cancel_batch(c,learner) end
+_cbs_before_fit(learner::Learner, epoch_count, batch_size) =  for cb in learner.cbs before_fit(cb,learner,epoch_count,batch_size) end
+_cbs_after_fit(learner::Learner) =  for cb in learner.cbs after_fit(cb,learner) end
+_cbs_after_cancel_fit(learner::Learner) =  for cb in learner.cbs after_cancel_fit(cb,learner) end
 
-function _do_begin_fit(learner::Learner, n_epoch)
-    learner.n_epoch = n_epoch
-    learner.loss = 0.0
-    _cbs_begin_fit(learner)
-end
+_cbs_before_epoch(learner::Learner, epoch) =  for cb in learner.cbs before_epoch(cb,learner,epoch) end
+_cbs_after_epoch(learner::Learner, epoch) =  for cb in learner.cbs after_epoch(cb,learner,epoch) end
+_cbs_after_cancel_epoch(learner::Learner, epoch) =  for cb in learner.cbs after_cancel_epoch(cb,learner,epoch) end
 
-function _do_epoch_train(learner::Learner)
+_cbs_before_epoch_train(learner::Learner, epoch) =  for cb in learner.cbs before_epoch_train(cb,learner,epoch) end
+_cbs_after_epoch_train(learner::Learner, epoch) =  for cb in learner.cbs after_epoch_train(cb,learner,epoch) end
+_cbs_after_cancel_epoch_train(learner::Learner, epoch) =  for cb in learner.cbs after_cancel_epoch_train(cb,learner,epoch) end
+
+_cbs_before_batch_train(learner::Learner, epoch, batch) =  for cb in learner.cbs before_batch_train(cb,learner, epoch, batch) end
+_cbs_batch_train_loss(learner::Learner, epoch, batch, loss) =  for cb in learner.cbs batch_train_loss(cb,learner, epoch, batch, loss) end
+_cbs_after_batch_train(learner::Learner, batch, epoch) =  for cb in learner.cbs after_batch_train(cb,learner, epoch, batch) end
+_cbs_after_cancel_batch_train(learner::Learner, batch, epoch) =  for cb in learner.cbs after_cancel_batch_train(cb,learner, epoch, batch) end
+
+_cbs_before_epoch_validate(learner::Learner, epoch) =  for cb in learner.cbs before_epoch_validate(cb,learner,epoch) end
+_cbs_after_epoch_validate(learner::Learner, epoch) =  for cb in learner.cbs after_epoch_validate(cb,learner,epoch) end
+_cbs_after_cancel_epoch_validate(learner::Learner, epoch) =  for cb in learner.cbs after_cancel_epoch_validate(cb,learner,epoch) end
+
+_cbs_before_batch_validate(learner::Learner, epoch, batch) =  for cb in learner.cbs before_batch_validate(cb,learner, epoch, batch) end
+_cbs_after_batch_validate(learner::Learner, epoch, batch) =  for cb in learner.cbs after_batch_validate(cb,learner, epoch, batch) end
+_cbs_batch_validate_loss(learner::Learner, epoch, batch, loss) =  for cb in learner.cbs batch_validate_loss(cb,learner, epoch, batch, loss) end
+_cbs_after_cancel_batch_validate(learner::Learner, epoch, batch) =  for cb in learner.cbs after_cancel_batch_validate(cb,learner, epoch, batch) end
+
+function _do_batch_train(learner::Learner, batch_data, epoch, batch, ps)
     try
-        learner.dl = learner.dls.train
-        _cbs_begin_train(learner)
-        all_batches(learner)
-    catch CancelTrainException
-        _cbs_after_cancel_train(learner)
+        _loss(xy) = learner.loss(learner.model(xy[1]),xy[2])
+        _cbs_before_batch_train(learner,epoch, batch)
+        loss, back = Zygote.pullback(ps) do
+            sum(_loss.(batch_data))
+        end
+        _cbs_batch_train_loss(learner, epoch, batch, loss)
+        gs = back(1)        
+        update!(learner.opt, ps, gs)
+    #catch CancelBatchTrainException
+    #    _cbs_after_cancel_batch_train(learner,batch_index,epoch)
     finally
-        _cbs_after_train(learner)
+        _cbs_after_batch_train(learner,batch,epoch)
     end
 end
 
-function _do_epoch_validate(learner::Learner, ds_idx=1, dl=nothing)
-    dl = isnothing(dl) ? learner.dls[ds_idx] : dl
+function _do_epoch_train(learner::Learner, epoch, ps)
     try
-        learner.dl = dl
-        _cbs_begin_validate(learner)
-        # with torch.no_grad(): TODO
-        all_batches(learner)
-    catch CancelValidException
-        _cbs_after_cancel_validate(learner)
+        data = learner|> data_bunch |> train
+        _cbs_before_epoch_train(learner,epoch)
+        for (batch,batch_data) in enumerate(data)
+            _do_batch_train(learner,batch_data,epoch,batch,ps)
+        end 
+    #catch CancelEpochTrainException
+    #    _cbs_after_cancel_epoch_train(learner,epoch)
     finally
-        _cbs_after_validate(learner)
+        _cbs_after_epoch_train(learner,epoch)
     end
 end
 
-function _end_cleanup(learner::Learner)
-    learner.dl,learner.xb,learner.yb,learner.pred,learner.loss = nothing,(nothing,),(nothing,),nothing,nothing
+function _do_batch_validate(learner::Learner, batch_data, epoch, batch)
+    try
+        _loss(xy) = learner.loss(learner.model(xy[1]),xy[2])
+        _cbs_before_batch_validate(learner,epoch,batch)
+        loss = sum(_loss.(batch_data))
+        _cbs_batch_validate_loss(learner,epoch,batch,loss)
+    #catch CancelBatchValidateException
+    #    _cbs_after_cancel_batch_validate(learner,epoch,batch)
+    finally
+        _cbs_after_batch_validate(learner,epoch,batch)
+    end
+end
+
+function _do_epoch_validate(learner::Learner, epoch)
+    try
+        _cbs_before_epoch_validate(learner,epoch)
+        data = learner|> data_bunch |> valid
+        _cbs_before_epoch_validate(learner,epoch)
+        for (batch,batch_data) in enumerate(data)
+            _do_batch_validate(learner,batch_data,epoch,batch)
+        end 
+    #catch CancelEpochValidateException
+    #    _cbs_after_cancel_epoch_validate(learner,epoch)
+    finally
+        _cbs_after_epoch_validate(learner,epoch)
+    end
 end
 
 """
-    fit(learner::Learner, n_epoch, lr=nothing, wd=nothing, cbs=nothing, reset_opt=false)
+    fit(learner::Learner, epoch_count)
 
-Fit learner.model for n#94epoch using cbs. Optionally reset#94opt
-
-Uses lr and wd if they are provided, otherwise use the defaults values given by the lr and wd attributes of Learner.
-
-All the examples use synth#94learner which is a simple Learner training a linear regression model.
-
-```
-#Training a few epochs should make the model better
-learn = synth_learner(lr=1e-2)
-#learn.model = learn.model.cpu() TODO
-xb,yb = one_batch(learn.dls)
-init_loss = loss_func(learn, learn.model(xb), yb)
-fit(learn, 6)
-@assert learn.loss < init_loss
-```
+Fit [`model(learner)`](@ref model(::Learner)) for `epoch_count` epochs invoking callbacks for `learner`.
 """
-function fit(learner::Learner, n_epoch, lr=nothing, wd=nothing, cbs=nothing, reset_opt=false)
-    if reset_opt || isnothing(learner.opt)
-        create_opt(learner)
-    end
-    wd = isnothing(wd) ? learner.wd : wd
-    if !isnothing(wd)
-        set_hypers(learner.opt,wd=wd)
-    end
-    set_hypers(learner.opt, lr= isnothing(lr) ? learner.lr : lr)
-
+function fit!(learner::Learner, epoch_count)
     try
-        _do_begin_fit(learner,n_epoch)
-        for epoch in range(n_epoch)
+        batch_size = train(data_bunch(learner)).batchsize
+        ps = params(learner.model)
+        #@infiltrate
+        _cbs_before_fit(learner,epoch_count,batch_size)
+        for epoch in 1:epoch_count
             try
-                learner.epoch=epoch
-                _cbs_begin_epoch(learner)
-                _do_epoch_train(learner)
-                _do_epoch_validate(learner)
-            catch CancelEpochException
-                _cbs_after_cancel_epoch(learner)
+                _cbs_before_epoch(learner,epoch)
+                _do_epoch_train(learner,epoch,ps)               
+                _do_epoch_validate(learner,epoch)
+            #catch CancelEpochException
+            #    _cbs_after_cancel_epoch(learner,epoch)
             finally
-                _cbs_after_epoch(learner)
+                _cbs_after_epoch(learner,epoch)
             end
         end
-    catch CancelFitException
-        _cbs_after_cancel_fit(learner)
+    #catch CancelFitException
+    #    _cbs_after_cancel_fit(learner)
     finally
         _cbs_after_fit(learner)
-        _end_cleanup(learner)
     end
 end
+
+"""
+    implements_learner(T::DataType)
+
+Test if a type implements the [`AbstractLearner`](@ref) interface.
+"""
+function implements_learner(T::DataType)
+    return hasmethod(model,(T,)) &&
+        hasmethod(model!,(T,Any)) &&
+        hasmethod(loss,(T,)) &&
+        hasmethod(loss!,(T,Any)) &&
+        hasmethod(opt,(T,)) &&
+        hasmethod(opt!,(T,Any)) &&
+        hasmethod(cbs,(T,)) &&
+        hasmethod(add_cb!,(T,AbstractCallback))
+end
+
+@assert implements_learner(Learner)
